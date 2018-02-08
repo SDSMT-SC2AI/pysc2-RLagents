@@ -8,9 +8,14 @@ from absl import flags
 from absl.flags import FLAGS
 
 from pysc2.env import sc2_env
-from pysc2.env import environment
+from pysc2.agents import base_agent
 from pysc2.lib import actions
 from pysc2.maps import ladder
+from pysc2.lib import features
+from pysc2.lib import point
+
+_SELECT_ARMY = actions.FUNCTIONS.select_army.id
+_NOT_QUEUED = [0]
 
 class Action_Space:
 
@@ -23,6 +28,50 @@ class Action_Space:
     
     def __init__(self):
         return
+    # Action space functions
+    def inject_Larva(queen_id):
+        actions.FunctionCall(select_unit, [sc_ui.ActionMultiPanel.SingleSelect, 86])
+        point = [0, 0]
+        actions.FunctionCall(select_unit, [sc_ui.ActionMultiPanel.SelectAllOfType, 126])
+        actions.FunctionCall(Effect_InjectLarva_screen, [_NOT_QUEUED, point])
+        return
+    def harvest_Minerals(drone_id):
+        actions.FunctionCall(select_unit, [sc_ui.ActionMultiPanel.SelectAllOfType, 104])
+        point = [0, 0]
+        actions.FunctionCall(Harvest_Gather_screen, [_NOT_QUEUED, point])
+        return
+    def harvest_Gas(drone_id):
+        actions.FunctionCall(select_unit, [sc_ui.ActionMultiPanel.SelectAllOfType, 104])
+        point = [0, 0]
+        actions.FunctionCall(Harvest_Gather_screen, [_NOT_QUEUED, point])
+        return
+    def build_Hatchery(drone_id):
+        actions.FunctionCall(select_unit, [sc_ui.ActionMultiPanel.SelectAllOfType, 104])
+        point = [0, 0]
+        actions.FunctionCall(Build_Hatchery_screen, [_NOT_QUEUED, point])
+        return
+    def build_Gas_Gyser(drone_id):
+        actions.FunctionCall(select_unit, [sc_ui.ActionMultiPanel.SelectAllOfType, 104])
+        point = [0, 0]
+        actions.FunctionCall(Build_Refinery_screen, [_NOT_QUEUED, point])
+        return
+    def train_Drone():
+        actions.FunctionCall(select_larva, [])
+        actions.FunctionCall(Train_Drone_quick, [_NOT_QUEUED])
+        return
+    def train_Queen():
+        actions.FunctionCall(select_unit, [sc_ui.ActionMultiPanel.SelectAllOfType, 86])
+        actions.FunctionCall(Train_Queen_quick, [_NOT_QUEUED])
+        return
+    def train_Overlord():
+        actions.FunctionCall(select_larva, [])
+        actions.FunctionCall(Train_Overlord_quick, [])
+        return
+    def build_Spawning_Pool(drone_id):
+        actions.FunctionCall(select_unit, [sc_ui.ActionMultiPanel.SelectAllOfType, 104])
+        point = [0, 0]
+        actions.FunctionCall(Build_SpawningPool_screen, [_NOT_QUEUED, point])
+        return
 
     # compare the provided ID number to the ID of the units allowed
     def get_actions(self, unit_id):
@@ -30,45 +79,18 @@ class Action_Space:
         if unit_id in self.valid_units:
             return self.valid_units[unit_id]
         return "Unit not defined in action space"
-
+    #function for checking if drones are doing a non-interuptable task
     def drone_busy(drone_id):
         if drone_id in busy_units:
             return True
         return False
   
-    
-# Action space functions
-def inject_Larva(queen_id):
-    return
-def harvest_Minerals(drone_id):
-    return
-def harvest_Gas(drone_id):
-    return
-def build_Hatchery(drone_id):
-    return
-def build_Gas_Gyser(drone_id):
-    return
-def train_Drone():
-    actions.select_larva()
-    actions.FUNCTIONS[467]
-    return
-def train_Queen():
-    actions.select_unit(actions.sc_ui.ActionMultiPanel.SelectAllOfType, 86)
-    actions.FUNCTIONS[486]
-    return
-# I was thinking thats since you only need overlords when supply capped this function might be better as part of train_drone
-# the same as the train queen tests for the spawning pool
-def train_Overlord():
-    actions.select_larva()
-    actions.FUNCTIONS[483]
-    return
+class Mineral_agent(base_agent.BaseAgent):
+  """An agent for building a base and populating it with drones."""
 
-# Auxilary functions
-def move_Screen(unit_id):
-    return
-def build_Spawning_Pool(drone_id):
-    return
-
+  def step(self, obs):
+    act = Action_Space
+    act.train_Drone()
 
 
 # testing and debuging
@@ -79,13 +101,12 @@ def main():
     print("test for a unit not in the action space (112-zerg_Corruptor)")
     print (t1.get_actions(t1, 112))
 
+    agent = Mineral_agent
     map_name = FLAGS.map_name
     print('Initializing Testing Enviroment')
     act_spec = sc2_env.SC2Env(map_name=map_name).action_spec()
     env = sc2_env.SC2Env(map_name=map_name, agent_race='Z')
-    env.step(act_spec)
-    #train_Queen()
-    train_Drone()
+
 
 
 if __name__ == '__main__':
