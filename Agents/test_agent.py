@@ -20,8 +20,9 @@ class TestAgent(base_agent.BaseAgent):
     def step(self, obs):
         super(TestAgent, self).step(obs)
 
+
         if self.drone == True:
-            self.t1.train_Drone(obs)
+            self.t1.train_Drone()
             self.drone = False
 
         return self.t1.action_step()

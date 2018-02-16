@@ -15,7 +15,6 @@ from pysc2.maps import ladder
 from pysc2.lib import features
 from pysc2.lib import point
 
-
 #units
 _DRONE = 104
 _HATCHERY = 86
@@ -34,9 +33,6 @@ _SELECT_LARVA = actions.FUNCTIONS.select_larva.id
 _TRAIN_DRONE = actions.FUNCTIONS.Train_Drone_quick.id
 _TRAIN_QUEEN = actions.FUNCTIONS.Train_Queen_quick.id
 _TRAIN_OVERLORD = actions.FUNCTIONS.Train_Overlord_quick.id
-
-
-
 
 #feature info
 _PLAYER_RELATIVE = features.SCREEN_FEATURES.player_relative.index
@@ -73,7 +69,8 @@ class Action_Space:
            | (action == "Effect_InjectLarva_screen")
            | (action == "Harvest_Gather_screen")
            | (action == "Build_Hatchery_screen")
-           | (action == "Build_Extractor_screen")):
+           | (action == "Build_Extractor_screen")
+           | (action == "Build_SpawningPool_screen")):
             target = self.pointq.popleft()
         else:
             target = [0,0]
@@ -92,21 +89,52 @@ class Action_Space:
             }[action]
 
     # Action space functions
-    def inject_Larva(self, obs, queen_id):
-        #select a queen
+    def build_Hatchery(self, obs, drone_id):
+        #first select a drone
         units = obs.observation["screen"][_UNIT_TYPE]
-        unit_y, unit_x = (units == _QUEEN).nonzero()
+        unit_y, unit_x = (units == _DRONE).nonzero()
+        target = [unit_x[0], unit_y[0]]
+        self.pointq.append(target)
+        self.actionq.append("Select_Point_screen")
+        #get the coords for the next base and build there
+        target = get_base_coord()
+        self.pointq.append(target)
+        self.actionq.append("Build_Hatchery_screen")
+
+    def build_Gas_Gyser(self, obs, drone_id):
+        #select a drone
+        units = obs.observation["screen"][_UNIT_TYPE]
+        unit_y, unit_x = (units == _DRONE).nonzero()
         target = [unit_x[0], unit_y[0]]
         self.pointq.append(target)
         self.actionq.append("Select_Point_screen")
 
-        #find a hatchery and inject it
+        #find an unused geyser and build on it
+        unit_y, unit_x = (units == 342).nonzero()
+        half = len(unit_x)/2
+        #only works for spawning in the bottom, need to figure out how to average location for placement
+        target = [unit_x[:int(half)].mean(), unit_y[:int(half)].mean()]
+        self.pointq.append(target)
+        self.actionq.append("Build_Extractor_screen")
+
+    def build_Spawning_Pool(self, obs, drone_id):
+        #step on is selecting a dron to build with
         units = obs.observation["screen"][_UNIT_TYPE]
-        unit_y, unit_x = (units == _HATCHERY).nonzero()
+        unit_y, unit_x = (units == _DRONE).nonzero()
+        #grab the first drone for now
         target = [unit_x[0], unit_y[0]]
         self.pointq.append(target)
-        self.actionq.append("Effect_InjectLarva_screen")
-  
+        self.actionq.append("Select_Point_screen")
+
+        #then build the pool
+        units = obs.observation["screen"][_UNIT_TYPE]
+        unit_y, unit_x = (units == _HATCHERY).nonzero()
+        #location is just left of the nearest hatchery
+        target = [unit_x.mean()-4, unit_y.mean()]
+        self.pointq.append(target)
+        self.actionq.append("Build_SpawningPool_screen")
+        self.pool_flag = True
+        
     def harvest_Minerals(self, obs, drone_id):
         #select a drone
         units = obs.observation["screen"][_UNIT_TYPE]
@@ -133,37 +161,25 @@ class Action_Space:
         #find an extractor and que clicking it
         units = obs.observation["screen"][_UNIT_TYPE]
         unit_y, unit_x = (units == 88).nonzero()
-        target = [unit_x[0], unit_y[0]]
+        target = [unit_x.mean(), unit.mean()]
         self.pointq.append(target)
         self.actionq.append("Harvest_Gather_screen")
 
-    def build_Hatchery(self, obs, drone_id):
-        #first select a drone
+    def inject_Larva(self, obs, queen_id):
+        #select a queen
         units = obs.observation["screen"][_UNIT_TYPE]
-        unit_y, unit_x = (units == _DRONE).nonzero()
-        target = [unit_x[0], unit_y[0]]
-        self.pointq.append(target)
-        self.actionq.append("Select_Point_screen")
-        #get the coords for the next base and build there
-        target = get_base_coord()
-        self.pointq.append(target)
-        self.actionq.append("Build_Hatchery_screen")
-
-    def build_Gas_Gyser(self, obs, drone_id):
-        #select a drone
-        units = obs.observation["screen"][_UNIT_TYPE]
-        unit_y, unit_x = (units == _DRONE).nonzero()
+        unit_y, unit_x = (units == _QUEEN).nonzero()
         target = [unit_x[0], unit_y[0]]
         self.pointq.append(target)
         self.actionq.append("Select_Point_screen")
 
-        #find an unused geyser and build on it
-        unit_y, unit_x = (units == 342).nonzero()
-        #only works for spawning in the bottom, need to figure out how to average location for placement
-        target = [unit_x[1], unit_y[1]]
+        #find a hatchery and inject it
+        units = obs.observation["screen"][_UNIT_TYPE]
+        unit_y, unit_x = (units == _HATCHERY).nonzero()
+        target = [unit_x.mean(), unit_y.mean()]
         self.pointq.append(target)
-        self.actionq.append("Build_Extractor_screen")
-     
+        self.actionq.append("Effect_InjectLarva_screen")
+        
     def train_Drone(self, obs):
         #find larva position
         units = obs.observation["screen"][_UNIT_TYPE]
@@ -174,22 +190,7 @@ class Action_Space:
         self.pointq.append(target)
         self.actionq.append("Select_Point_screen")
         self.actionq.append("Train_Drone_quick")
-
-    def train_Queen(self, obs):
-        #if no pool is built redirect to building it instead
-        if self.pool_flag == False:
-            self.build_Spawning_Pool(0, obs)
-            return
-
-        #select a hatchery
-        units = obs.observation["screen"][_UNIT_TYPE]
-        unit_y, unit_x = (units == _HATCHERY).nonzero()
-        target = [unit_x[0], unit_y[0]]
-        self.pointq.append(target)
-        self.actionq.append("Select_Point_screen")
-        #que a queen
-        self.actionq.append("Train_Queen_quick")
-        
+                
     def train_Overlord(self, obs):
         #find larva position
         units = obs.observation["screen"][_UNIT_TYPE]
@@ -201,28 +202,21 @@ class Action_Space:
         self.actionq.append("Select_Point_screen")
         self.actionq.append("Train_Overlord_quick")
 
-    def build_Spawning_Pool(self, drone_id, obs):
-        #step on is selecting a dron to build with
-        units = obs.observation["screen"][_UNIT_TYPE]
-        unit_y, unit_x = (units == _DRONE).nonzero()
-        #grab the first drone for now
-        target = [unit_x[0], unit_y[0]]
-        self.pointq.append(target)
-        self.actionq.append("Select_Point_screen")
+    def train_Queen(self, obs):
+        #if no pool is built redirect to building it instead
+        if self.pool_flag == False:
+            self.build_Spawning_Pool(0, obs)
+            return
 
-        #then build the pool
+        #select a hatchery
         units = obs.observation["screen"][_UNIT_TYPE]
         unit_y, unit_x = (units == _HATCHERY).nonzero()
-        #location is just left of the nearest hatchery
-        target = [unit_x[0]-3, unit_y[0]]
+        target = [unit_x.mean(), unit_y.mean()]
         self.pointq.append(target)
-        self.actionq.append("Build_SpawningPool_screen")
-        self.pool_flag = True
+        self.actionq.append("Select_Point_screen")
+        #que a queen
+        self.actionq.append("Train_Queen_quick")
         
- 
-        
-
-
     # compare the provided ID number to the ID of the units allowed
     def get_actions(self, unit_id):
         # return the valid actions for the given unit 
@@ -236,23 +230,12 @@ class Action_Space:
         return False
     #function for finding valid expos
     def get_base_coord():
+        #need to find a method for getting base expansion coordinates.
         return [0,0]
 
-# testing and debuging
-def main():
-    t1 = Action_Space
-    print("getting drone actions")
-    print (t1.get_actions(t1, 151))
-    print("test for a unit not in the action space (112-zerg_Corruptor)")
-    print (t1.get_actions(t1, 112))
 
-    agent = Mineral_agent
-    map_name = FLAGS.map_name
-    print('Initializing Testing Enviroment')
-    act_spec = sc2_env.SC2Env(map_name=map_name).action_spec()
-    env = sc2_env.SC2Env(map_name=map_name, agent_race='Z')
+def main():
+    return
 
 if __name__ == '__main__':
-    flags.DEFINE_string("map_name", "AbyssalReef", "Name of the map/minigame")
-    FLAGS(sys.argv)
     main()
